@@ -5,59 +5,89 @@ namespace SharableSpreadSheet
 {
     class SharableSpreadSheet
     {
-        Form1 dataGrid;
+        DataGridView dataGrid;
         int nR;
         int nC;
-        public SharableSpreadSheet(int nRows, int nCols, int nUsers=-1)
+        public SharableSpreadSheet(int nRows, int nCols, int nUsers = -1)
         {
             // nUsers used for setConcurrentSearchLimit, -1 mean no limit.
             // construct a nRows*nCols spreadsheet
-            dataGrid = new Form1();
-            nR = nRows; 
+            dataGrid = new DataGridView();
+            nR = nRows;
             nC = nCols;
-            dataGrid.SetViewer(0, 0, nCols, nRows);
-               
+            dataGrid.SetBounds(0, 0, nCols, nRows);
+
         }
         public String getCell(int row, int col)
         {
             // return the string at [row,col]
-            return dataGrid.GetCellInViewer(row, col);
+            return dataGrid.Rows[row].Cells[col].ToString();
         }
         public void setCell(int row, int col, String str)
         {
             // set the string at [row,col]
-            dataGrid.SetCellInViewer(row, col, str);
-   
+            dataGrid.Rows[row].Cells[col].Value = str;
+
         }
-        public Tuple<int,int> searchString(String str)
+        public Tuple<int, int> searchString(String str)
         {
-            int row, col;
-            dataGrid.SearchInViewer(str, out row, out col);
+            int row = -1, col = -1;
+            for (int i = 0; i < dataGrid.Rows.Count; i++)
+            {
+                for (int j = 0; j < dataGrid.Columns.Count; j++)
+                {
+                    if (dataGrid.Rows[i].Cells[j].Value.Equals(str))
+                    {
+                        row = i; col = j; break;
+                    }
+                }
+            }
             // return first cell indexes that contains the string (search from first row to the last row)
             return Tuple.Create(row, col);
         }
         public void exchangeRows(int row1, int row2)
         {
             // exchange the content of row1 and row2
-            dataGrid.SwitchRows(row1, row2);
+            for (int i = 0; i < dataGrid.Columns.Count; i++)
+            {
+                DataGridViewCell tmp = dataGrid.Rows[row1].Cells[i];
+                dataGrid.Rows[row1].Cells[i].Value = dataGrid.Rows[row2].Cells[i].Value;
+                dataGrid.Rows[row2].Cells[i].Value = tmp.Value;
+            }
         }
         public void exchangeCols(int col1, int col2)
         {
             // exchange the content of col1 and col2
-            dataGrid.SwitchCols(col1, col2);
+            for (int i = 0; i < dataGrid.Rows.Count; i++)
+            {
+                DataGridViewCell tmp = dataGrid.Rows[i].Cells[col1];
+                dataGrid.Rows[i].Cells[col1].Value = dataGrid.Rows[i].Cells[col2].Value;
+                dataGrid.Rows[i].Cells[col2].Value = tmp.Value;
+            }
         }
         public int searchInRow(int row, String str)
         {
-            int col;
+            int col = -1;
             // perform search in specific row
-            dataGrid.SearchInRow(row, str, out col);
+            for (int i = 0; i < dataGrid.Columns.Count; i++)
+                if (dataGrid.Rows[row].Cells[i].Value.Equals(str))
+                {
+                    col = i;
+                    break;
+                }
             return col;
         }
         public int searchInCol(int col, String str)
         {
-            int row;
-            // perform search in specific col
-            dataGrid.SearchInCol(col, str, out row);
+            int row = -1;
+            for (int i = 0; i < dataGrid.Rows.Count; i++) 
+            { 
+                if (dataGrid.Rows[i].Cells[col].Value.Equals(str))
+                {
+                    row = i;
+                    break;
+                }
+            }
             return row;
         }
         public Tuple<int, int> searchInRange(int col1, int col2, int row1, int row2, String str)
@@ -68,7 +98,7 @@ namespace SharableSpreadSheet
             {
                 for(int j = row1; j <= row2; j++)
                 {
-                    if (dataGrid.GetCellInViewer(j, i).Equals(str))
+                    if (getCell(j, i).Equals(str))
                         return Tuple.Create(i, j);
                 }
             }
@@ -76,18 +106,45 @@ namespace SharableSpreadSheet
         }
         public void addRow(int row1)
         {
-            dataGrid.AddRow(row1);
+            DataGridViewRow newRow = new DataGridViewRow();
+            for (int i = 0; i < dataGrid.Columns.Count; i++)
+                newRow.Cells.Add(new DataGridViewTextBoxCell());
+            dataGrid.Rows.Insert(row1 + 1, newRow);
             nR++;
         }
         public void addCol(int col1)
         {
             //add a column after col1
-            dataGrid.AddCol(col1);
+            DataGridViewColumn newCol = new DataGridViewColumn();
+            dataGrid.Columns.Insert(col1 + 1, newCol);
             nC++;
         }
         public Tuple<int, int>[] findAll(String str,bool caseSensitive)
         {
-            List<Tuple<int, int>> matchingCells = dataGrid.FindAll(str, caseSensitive);
+            List<Tuple<int, int>> matchingCells = new List<Tuple<int, int>>();
+
+            // Iterate over each row in the DataGridView
+            foreach (DataGridViewRow row in dataGrid.Rows)
+            {
+                // Iterate over each cell in the row
+                foreach (DataGridViewCell cell in row.Cells)
+                {
+                    // Perform the search based on case sensitivity flag
+                    bool isMatch;
+                    if (caseSensitive)
+                        isMatch = cell.Value?.ToString().Contains(str) == true;
+                    else
+                        isMatch = cell.Value?.ToString().IndexOf(str, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    // If the cell value matches, add the cell coordinates to the list
+                    if (isMatch)
+                    {
+                        int rowIndex = cell.RowIndex;
+                        int columnIndex = cell.ColumnIndex;
+                        matchingCells.Add(new Tuple<int, int>(rowIndex, columnIndex));
+                    }
+                }
+            }
             return matchingCells.ToArray();
         }
         public void setAll(String oldStr, String newStr ,bool caseSensitive)
@@ -95,7 +152,7 @@ namespace SharableSpreadSheet
             // replace all oldStr cells with the newStr str according to caseSensitive param
             Tuple<int, int>[] cellsToSet = findAll(oldStr, caseSensitive);
             foreach(Tuple<int,int> cell in cellsToSet)
-                dataGrid.SetCellInViewer(cell.Item1, cell.Item2, newStr);
+                setCell(cell.Item1, cell.Item2, newStr);
         }
         public Tuple<int, int> getSize()
         {
@@ -112,7 +169,7 @@ namespace SharableSpreadSheet
                 {
                     for (int col = 0; col < nC; col++)
                     {
-                        string cellValue = dataGrid.GetCellInViewer(row, col); // Replace with your own method to retrieve cell value
+                        string cellValue = getCell(row, col); // Replace with your own method to retrieve cell value
                         writer.Write(cellValue);
                         if (col < nC - 1)
                         {
@@ -137,7 +194,7 @@ namespace SharableSpreadSheet
 
                     foreach (string cellValue in cellValues)
                     {
-                        dataGrid.SetCellInViewer(row, col, cellValue.Trim()); // Replace with your own method to set the cell value
+                        setCell(row, col, cellValue.Trim()); // Replace with your own method to set the cell value
                         col++;
                     }
 
